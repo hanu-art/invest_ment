@@ -5,12 +5,14 @@ import upload from "../config/multer.config.js";
 
 const router = express.Router();
 
-// POST KYC with Aadhaar & PAN images
-router.post("/post", verifyToken, upload.fields([
-  { name: 'aadhaar_image', maxCount: 1 },
-  { name: 'pancard_image', maxCount: 1 }
-]), createKYC);
-
+router.post("/post", 
+  verifyToken,                       // 1. Token verify
+  upload.fields([                    // 2. File upload
+    { name: 'aadhaar_image', maxCount: 1 },
+    { name: 'pancard_image', maxCount: 1 }
+  ]),
+  createKYC                         // 3. Controller
+);
 // GET KYC by user ID
 router.get("/get", verifyToken, getKYC);
 

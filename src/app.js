@@ -10,7 +10,9 @@ import kycRouter from "./router/kyc.routes.js";
 import { verifyEmailConnection } from "./config/email.config.js";
 const app = express() 
 
+
  app.use(express.json())
+ app.use(express.urlencoded({ extended: true }));
  app.use(helmet({
    contentSecurityPolicy: false,
    crossOriginResourcePolicy: false,

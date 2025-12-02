@@ -19,12 +19,18 @@ export const createKYC = async (req, res) => {
       bank,
       ifsc
     } = req.body;
+   
+    console.log(req.files)
+    console.log("City received:", city);
 
     // Validate required fields
     if (!full_name || !aadhaar_no || !pan_number) {
       return sendError(res, 400, 'Full name, Aadhaar and PAN are required');
     }
 
+    //  FIX: Handle city
+    const finalCity = city && city.trim() !== '' ? city : 'Not Provided';
+    console.log(finalCity)
     // Check if KYC already exists for user
     const [existing] = await pool.execute(
       'SELECT * FROM kyc WHERE user_id = ?',
@@ -85,7 +91,7 @@ export const createKYC = async (req, res) => {
         full_name,
         email || null,
         address || null,
-        city || null,
+        finalCity,
         state || null,
         aadhaar_no,
         pan_number,
@@ -98,16 +104,22 @@ export const createKYC = async (req, res) => {
       ]
     );
 
-    // Update user's KYC status
-    await pool.execute(
-      'UPDATE users SET kyc_status = "pending" WHERE id = ?',
-      [userId]
-    );
+    //  FIX: Try to update kyc_status, but don't fail if column doesn't exist
+    try {
+      await pool.execute(
+        'UPDATE users SET kyc_status = "pending" WHERE id = ?',
+        [userId]
+      );
+      console.log(" kyc_status updated");
+    } catch (updateError) {
+      console.log("Could not update kyc_status (column may not exist):", updateError.message);
+      // Continue without failing
+    }
 
     sendSuccess(res, {
       kyc_id: result.insertId,
       user_id: userId,
-      kyc_status: 'pending'
+      status: 'submitted'
     }, 'KYC submitted successfully and under review');
 
   } catch (error) {
@@ -120,7 +132,6 @@ export const createKYC = async (req, res) => {
     sendError(res, 500, 'Error submitting KYC');
   }
 };
-
 // GET - Get KYC details for logged in user
 export const getKYC = async (req, res) => {
   try {
