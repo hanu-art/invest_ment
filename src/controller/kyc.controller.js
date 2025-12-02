@@ -135,31 +135,44 @@ export const createKYC = async (req, res) => {
 // GET - Get KYC details for logged in user
 export const getKYC = async (req, res) => {
   try {
-    const userId = req.user.id;
+    // Check if user is admin
+    if (req.user.userType !== 'admin') {
+      return sendError(res, 403, 'Admin access required');
+    }
 
     const [kycData] = await pool.execute(
       `SELECT 
-        kyc_id, full_name, email, address, city, state,
-        aadhaar_no, pan_number, account_no, bank, ifsc,
-        aadhaar_image, pancard_image, user_id
-       FROM kyc 
-       WHERE user_id = ?`,
-      [userId]
+        k.kyc_id, 
+        k.full_name, 
+        k.email, 
+        k.address, 
+        k.city, 
+        k.state,
+        k.aadhaar_no, 
+        k.pan_number, 
+        k.account_no, 
+        k.bank, 
+        k.ifsc,
+        k.aadhaar_image, 
+        k.pancard_image, 
+        k.user_id,
+        u.name as user_name,
+        u.phone as user_phone,
+        u.email as user_email,
+        u.created_at as user_joined
+       FROM kyc k
+       LEFT JOIN users u ON k.user_id = u.id
+       ORDER BY k.kyc_id DESC`
     );
 
-    if (kycData.length === 0) {
-      return sendError(res, 404, 'KYC not found for this user');
-    }
-
-    // Hide sensitive data if needed
-    const response = { ...kycData[0] };
-    // delete response.aadhaar_image; // Optional
-    // delete response.pancard_image;
-
-    sendSuccess(res, response, 'KYC details retrieved');
+    sendSuccess(res, {
+      total: kycData.length,
+      data: kycData
+    }, 'All KYC data retrieved successfully');
 
   } catch (error) {
-    console.error('Get KYC error:', error);
-    sendError(res, 500, 'Error fetching KYC details');
+    console.error('Get all KYC error:', error);
+    sendError(res, 500, 'Error fetching KYC data');
   }
 };
+
