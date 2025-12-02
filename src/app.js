@@ -5,8 +5,8 @@ import { sendResponse } from "./utils/responseHandler.js";
 import authRouter from "./router/auth.router.js"; 
 import paymentRouter from "./router/payment.router.js";
 import widrowRouter from "./router/widrow.router.js";
-
-
+import adminPaymentRouter from "./router/admin.payement.router.js";
+import kycRouter from "./router/kyc.routes.js";
 import { verifyEmailConnection } from "./config/email.config.js";
 const app = express() 
 
@@ -24,7 +24,9 @@ app.use(corsMiddleware)
 
  //auth 
  app.use("/api/auth" , authRouter)  
- app.use("/api/payment" ,paymentRouter)
- app.use("/api/widrow" , widrowRouter)
+ app.use("/api/payment" ,paymentRouter) // user deposit
+ app.use("/api/widrow" , widrowRouter)  // widrow
+ app.use("/api/admin/payment" , adminPaymentRouter)   
+ app.use("/api/kyc" , kycRouter)  
 verifyEmailConnection()
  export default app;

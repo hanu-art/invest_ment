@@ -3,13 +3,13 @@ import pool from "../config/database.config.js";
 
 export const createUser = async (userData) => {
     try {
-        const { name, phone, email, bank_account_number, bank_name, ifsc_code, password_hash } = userData;
+        const { name, phone, email, bank_account_number, bank_name, password_hash } = userData;
         
         const [result] = await pool.execute(
             `INSERT INTO users 
-             (name, phone, email, bank_account_number, bank_name, ifsc_code, password_hash, status) 
-             VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')`,
-            [name, phone, email, bank_account_number, bank_name, ifsc_code, password_hash]
+             (name, phone, email, bank_account_number,  password_hash, status) 
+             VALUES (?, ?, ?, ?, ?, 'pending')`,
+            [name, phone, email, bank_account_number, password_hash]
         );
 
         return {

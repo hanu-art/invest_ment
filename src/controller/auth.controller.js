@@ -7,10 +7,10 @@ import { createUser , pendingUserForAprove ,
  } from "../model/auth.model.js";
 import { getUserByEmail } from "../model/auth.model.js";
 import { getAdminByEmail } from "../model/admin.model.js";
-import { sendApprovalEmail } from "../service/email.servic.js";
+
 import { getUserByUniqueId } from "../model/auth.model.js";
 import { getApprovedUsers } from "../model/admin.model.js";
-
+import { userApprovalTemplate  , userRejectionTemplate} from "../utils/emailTemplate.js";
 import pool from "../config/database.config.js";
 
 export const registerUser = async (req , res)=>{
@@ -21,7 +21,7 @@ try {
         phone,
         email,
         bank_account_number,
-        bank_name, ifsc_code, 
+      
         password 
     }      = req.body
 
@@ -43,8 +43,8 @@ const result = await createUser({
     phone,
     email,
     bank_account_number,
-    bank_name,
-    ifsc_code,
+  
+
     password_hash
 });
 
@@ -73,51 +73,94 @@ export const getPendingUsers = async (req, res) => {
 
 
 
+
+
 export const approvePendingUser = async (req, res) => {
     try {
         const { email } = req.body;  
         const adminId = req.user.id; 
 
-    
         const existingUser = await getUserByEmail(email); 
         if (!existingUser) {
             return sendError(res, 404, 'User not found');
         }
 
-        
-        const uniqueId = `USER${Date.now()}${Math.random().toString(36).substr(2, 5)}`.toUpperCase();
+        const uniqueId = `octa${(Math.floor(Math.random() * 1000) + 1000).toString().substr(1)}`;
 
         // Model call karo with ALL parameters
         const updateResult = await approveUserModel(email, uniqueId, adminId);
 
-        //  Check karo update hua ya nahi
         if (updateResult.affectedRows === 0) {
             return sendError(res, 400, 'User already approved or not found');
         }
-    
 
-         // mail send to user
-        try {
-            await sendApprovalEmail(existingUser.email, uniqueId, existingUser.name);
-            console.log(` Approval email sent to: ${existingUser.email}`);
-        } catch (emailError) {
-            console.log(' Email failed but user approved:', emailError.message);
-            // Email fail hone par bhi approve ho jayega
-        }
+        // Frontend ke liye template send karo
+        const emailTemplate = userApprovalTemplate(existingUser.name, uniqueId);
 
-
-
-
-        // Success response
+        // Success response with template
         sendSuccess(res, { 
             uniqueId: uniqueId,
             email: email,
+            user_name: existingUser.name,
+            email_template: emailTemplate,
             message: "User approved successfully"
         }, "User approved successfully");
 
     } catch (error) {
         console.error('Approve error:', error);
         sendError(res, 500, 'Error approving user');
+    }
+};
+
+
+
+
+export const rejectPendingUser = async (req, res) => {
+    try {
+        const { email, rejection_reason } = req.body;  
+        const adminId = req.user.id; 
+
+        // Validation
+        if (!rejection_reason || rejection_reason.trim() === '') {
+            return sendError(res, 400, 'Rejection reason is required');
+        }
+
+        const existingUser = await getUserByEmail(email); 
+        if (!existingUser) {
+            return sendError(res, 404, 'User not found');
+        }
+
+        // Reject user in database
+        const [updateResult] = await pool.execute(
+            `UPDATE users 
+             SET status = 'rejected', 
+                 approved_by = ?, 
+                 approved_at = NOW(),
+            
+                 updated_at = NOW()
+             WHERE email = ? AND status = 'pending'`,
+            [adminId,  email]
+        );
+
+        if (updateResult.affectedRows === 0) {
+            return sendError(res, 400, 'User already processed or not found');
+        }
+
+        // Frontend ke liye rejection template send karo
+        const emailTemplate = userRejectionTemplate(existingUser.name, rejection_reason);
+
+        sendSuccess(res, { 
+            email: email,
+            user_name: existingUser.name,
+            rejection_reason: rejection_reason,
+            email_template: emailTemplate,
+            action: "rejected", 
+            message: "User rejected successfully"
+        }, "User rejected successfully");
+
+    } catch (error) {
+        console.error('Reject error:', error);
+        sendError(res, 500, 'Error rejecting user');
     }
 };
 
@@ -242,7 +285,7 @@ export const getUserProfile = async (req, res) => {
             const [users] = await pool.execute(
                 `SELECT 
                     id, unique_id, name, email, phone, 
-                    bank_account_number, bank_name, ifsc_code,
+                    bank_account_number,
                     status, total_coins, total_balance,
                     approved_by, approved_at, created_at
                  FROM users 

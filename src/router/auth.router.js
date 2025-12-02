@@ -11,7 +11,7 @@ import { verifyToken } from '../middleware/auth.middleware.js'
 import { getApprovedUsers } from '../model/admin.model.js'
 
 import { getApprovedUsersbyAdmin } from '../controller/auth.controller.js'
-
+import { rejectPendingUser } from '../controller/auth.controller.js'
 
 
 const router  = express.Router()  
@@ -35,6 +35,7 @@ router.get("/profile" ,verifyToken ,  getUserProfile)
 router.get("/pending", verifyToken , agenAdmintonly  , getPendingUsers)
 router.put("/aprovependiniguser" , verifyToken , agenAdmintonly , approvePendingUser)
 router.get("/aproveduserbyadmin" , verifyToken , agenAdmintonly , getApprovedUsersbyAdmin)
+router.put("/rejectuserbyadmin" , verifyToken , agenAdmintonly , rejectPendingUser)
 
 
 export default router

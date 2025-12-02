@@ -1,7 +1,7 @@
 import pool from "../config/database.config.js";
 import { sendError } from "../utils/errorHandler.js";
 import { sendSuccess } from "../utils/responseHandler.js"; 
-
+import { withdrawalApprovedTemplate , withdrawalRejectedTemplate } from "../utils/emailTemplate.js";
 
 
 
@@ -88,19 +88,20 @@ export const getPendingWithdrawals = async (req, res) => {
 
 
 
-// controllers/adminController.js
-
-// PROCESS WITHDRAWAL (DIRECT APPROVE)
+// PROCESS WITHDRAWAL (APPROVE)
 export const processWithdrawal = async (req, res) => {
     try {
-        const { withdrawalId, remarks = '' } = req.body; //  STATUS REMOVE
+        const { withdrawalId, remarks = '' } = req.body;
         const adminId = req.user.id;
 
         console.log(`Admin ${adminId} approving withdrawal ${withdrawalId}`);
 
-        // 1. Withdrawal details get karo (pehle hi)
+        // 1. Withdrawal details with user info get karo
         const [withdrawals] = await pool.execute(
-            `SELECT user_id, amount FROM withdrawal_requests WHERE id = ? AND status = 'pending'`,
+            `SELECT wr.*, u.name as user_name, u.email 
+             FROM withdrawal_requests wr
+             JOIN users u ON wr.user_id = u.id
+             WHERE wr.id = ? AND wr.status = 'pending'`,
             [withdrawalId]
         );
 
@@ -116,15 +117,11 @@ export const processWithdrawal = async (req, res) => {
         );
         const user = users[0];
 
-       
-      //  STRING TO NUMBER CONVERSION
+        // STRING TO NUMBER CONVERSION
         const userBalance = parseFloat(user.total_balance);
         const withdrawalAmount = parseFloat(withdrawal.amount);
 
-
-
-
-        if (userBalance <= withdrawalAmount) {
+        if (userBalance < withdrawalAmount) {
             return sendError(res, 400, 'User has insufficient balance');
         }
 
@@ -145,16 +142,83 @@ export const processWithdrawal = async (req, res) => {
             [withdrawal.amount, withdrawal.amount, withdrawal.user_id]
         );
 
+        // 5. Frontend ke liye email template send karo
+        const emailTemplate = withdrawalApprovedTemplate(
+            withdrawal.user_name, 
+            withdrawal.amount, 
+            remarks
+        );
+
         console.log(`Approved withdrawal ${withdrawalId}. Deducted ₹${withdrawal.amount} from user ${withdrawal.user_id}`);
 
         sendSuccess(res, {
             withdrawalId: withdrawalId,
             amount: withdrawal.amount,
-            userId: withdrawal.user_id
+            userId: withdrawal.user_id,
+            user_email: withdrawal.email,
+            user_name: withdrawal.user_name,
+            email_template: emailTemplate,
+            action: "approved"
         }, 'Withdrawal approved successfully');
 
     } catch (error) {
         console.error('Process withdrawal error:', error);
         sendError(res, 500, 'Error processing withdrawal');
+    }
+};
+
+// REJECT WITHDRAWAL
+export const rejectWithdrawal = async (req, res) => {
+    try {
+        const { withdrawalId, rejection_reason = '' } = req.body;
+        const adminId = req.user.id;
+
+        console.log(`Admin ${adminId} rejecting withdrawal ${withdrawalId}`);
+
+        // 1. Withdrawal details with user info get karo
+        const [withdrawals] = await pool.execute(
+            `SELECT wr.*, u.name as user_name, u.email 
+             FROM withdrawal_requests wr
+             JOIN users u ON wr.user_id = u.id
+             WHERE wr.id = ? AND wr.status = 'pending'`,
+            [withdrawalId]
+        );
+
+        if (withdrawals.length === 0) {
+            return sendError(res, 400, 'Withdrawal not found or already processed');
+        }
+        const withdrawal = withdrawals[0];
+
+        // 2. Withdrawal status update karo (rejected)
+        const [result] = await pool.execute(
+            `UPDATE withdrawal_requests 
+             SET status = 'rejected', processed_by = ?, remarks = ?, processed_at = NOW()
+             WHERE id = ? AND status = 'pending'`,
+            [adminId, rejection_reason, withdrawalId]
+        );
+
+        // 3. Frontend ke liye email template send karo
+        const emailTemplate = withdrawalRejectedTemplate(
+            withdrawal.user_name, 
+            withdrawal.amount, 
+            rejection_reason
+        );
+
+        console.log(`Rejected withdrawal ${withdrawalId} for user ${withdrawal.user_id}`);
+
+        sendSuccess(res, {
+            withdrawalId: withdrawalId,
+            amount: withdrawal.amount,
+            userId: withdrawal.user_id,
+            user_email: withdrawal.email,
+            user_name: withdrawal.user_name,
+            rejection_reason: rejection_reason,
+            email_template: emailTemplate,
+            action: "rejected"
+        }, 'Withdrawal rejected successfully');
+
+    } catch (error) {
+        console.error('Reject withdrawal error:', error);
+        sendError(res, 500, 'Error rejecting withdrawal');
     }
 };
