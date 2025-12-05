@@ -177,77 +177,101 @@ export const universalLogin = async (req, res) => {
 
         let userType = 'user';
         let user = null;
+        let storedPasswordHash = null;
 
         console.log(` Login attempt for: ${email}`);
 
-        //  PEHLE ADMINS TABLE MEIN DHOONDO (EMAIL SE)
-        user = await getAdminByEmail(email);
+        // 1. PEHLE ADMINS TABLE MEIN DHOONDO
+        const adminQuery = 'SELECT * FROM admins WHERE email = ? AND is_active = 1';
+        const [admins] = await pool.execute(adminQuery, [email]);
         
-        if (user) {
+        if (admins.length > 0) {
+            user = admins[0];
             userType = user.role; // 'admin' ya 'agent'
+            storedPasswordHash = user.password_hash;
             console.log(` Found in admins: ${userType}`);
         } 
-        //  AGAR ADMIN NAHI MILA TO USERS TABLE MEIN DHOONDO
+        // 2. AGAR ADMIN NAHI MILA TO USERS TABLE MEIN
         else {
-            // Pehle email se check karo
-            user = await getUserByEmail(email);
+            // Pehle email se check
+            const userByEmailQuery = 'SELECT * FROM users WHERE email = ?';
+            const [usersByEmail] = await pool.execute(userByEmailQuery, [email]);
             
-            // AGAR EMAIL SE NAHI MILA TO UNIQUE ID SE CHECK KARO
-            if (!user) {
-                user = await getUserByUniqueId(email);
-                console.log(` Found by Unique ID: ${email}`);
-            } else {
-                console.log(`Found by Email: ${email}`);
+            if (usersByEmail.length > 0) {
+                user = usersByEmail[0];
+                storedPasswordHash = user.password_hash;
+                console.log(` Found by Email: ${email}`);
+            } 
+            // Fir unique_id se check
+            else {
+                const userByUniqueIdQuery = 'SELECT * FROM users WHERE unique_id = ?';
+                const [usersByUniqueId] = await pool.execute(userByUniqueIdQuery, [email]);
+                
+                if (usersByUniqueId.length > 0) {
+                    user = usersByUniqueId[0];
+                    storedPasswordHash = user.password_hash;
+                    console.log(` Found by Unique ID: ${email}`);
+                }
             }
             
             userType = 'user';
         }
 
-        // AGAR KOI BHI NAHI MILA
-        if (!user) {
-            console.log(' Not found in any table');
+        // 3. AGAR KOI BHI NAHI MILA
+        if (!user || !storedPasswordHash) {
+            console.log(' User not found or no password hash');
             return sendError(res, 401, 'Invalid email/Unique ID ya password');
         }
 
-        //  PASSWORD VERIFY KARO
-       
-        // TOKEN GENERATE KARO
+        // ✅ 4. BCRYPT PASSWORD VERIFICATION
+        try {
+            const isPasswordValid = await bcrypt.compare(password, storedPasswordHash);
+            
+            if (!isPasswordValid) {
+                console.log(' Password mismatch');
+                return sendError(res, 401, 'Invalid password');
+            }
+            
+            console.log(' ✅ Password verified successfully');
+        } catch (bcryptError) {
+            console.error('❌ Bcrypt error:', bcryptError);
+            return sendError(res, 500, 'Password verification failed');
+        }
+
+        // 5. TOKEN GENERATE
         const token = jwt.sign(
             {
                 id: user.id,
-                email: user.email,
+                email: user.email || email,
                 userType: userType,
-                name: user.name
+                name: user.name || 'User'
             },
             "kathan12345",
             { expiresIn: '7d' }
         );
 
-        // LOGIN SUCCESS
+        // 6. RESPONSE DATA
         const responseData = {
             token: token,
             userId: user.id,
-            email: user.email,
+            email: user.email || email,
             userType: userType,
-            name: user.name
+            name: user.name || 'User'
         };
 
-        // AGAR USER HAI TO STATUS CHECK KARO
+        // 7. USER STATUS CHECK (sirf normal users ke liye)
         if (userType === 'user' && user.status !== 'approved') {
-            return sendError(res, 401, 'Account abhi approve nahi hua hai');
+            return sendError(res, 401, `Account status: ${user.status}. Please wait for approval.`);
         }
 
-        console.log(`Login successful: ${user.name} (${userType})`);
+        console.log(`✅ Login successful: ${user.name} (${userType})`);
         sendSuccess(res, responseData, 'Login successful');
 
     } catch (error) {
-        console.error('Login error:', error);
+        console.error('❌ Login error:', error);
         sendError(res, 500, 'Login failed');
     }
-}; 
-
-
-
+};
 
 // get approved user 
 

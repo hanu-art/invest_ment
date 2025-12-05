@@ -222,3 +222,31 @@ export const rejectWithdrawal = async (req, res) => {
         sendError(res, 500, 'Error rejecting withdrawal');
     }
 };
+
+
+
+export const getMyWithdrawalHistory = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const [withdrawals] = await pool.execute(
+      `SELECT * FROM withdrawal_requests 
+       WHERE user_id = ? 
+       ORDER BY created_at DESC`,
+      [userId]
+    );
+
+    res.json({
+      success: true,
+      total: withdrawals.length,
+      withdrawals: withdrawals
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Server error" 
+    });
+  }
+};

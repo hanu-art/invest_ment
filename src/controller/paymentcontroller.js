@@ -348,3 +348,62 @@ export const updateBalanceByAdmin = async (req, res) => {
         sendError(res, 500, 'Error updating user balance');
     }
 };
+
+//
+
+export const getApprovedPayments = async (req, res) => {
+  try {
+    const [payments] = await pool.execute(
+      `SELECT 
+        ps.*,
+        u.name as user_name,
+        u.email as user_email,
+        u.unique_id
+       FROM payment_screenshots ps
+       JOIN users u ON ps.user_id = u.id
+       WHERE ps.status = 'verified'
+       ORDER BY ps.verified_at DESC`
+    );
+
+    res.json({
+      success: true,
+      count: payments.length,
+      data: payments
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Server error" 
+    });
+  }
+};  
+
+
+
+export const getMyPaymentHistory = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const [payments] = await pool.execute(
+      `SELECT * FROM payment_screenshots 
+       WHERE user_id = ? 
+       ORDER BY created_at DESC`,
+      [userId]
+    );
+
+    res.json({
+      success: true,
+      total: payments.length,
+      payments: payments
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Server error" 
+    });
+  }
+};
