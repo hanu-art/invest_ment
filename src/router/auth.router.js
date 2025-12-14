@@ -12,7 +12,7 @@ import { getApprovedUsers } from '../model/admin.model.js'
 
 import { getApprovedUsersbyAdmin } from '../controller/auth.controller.js'
 import { rejectPendingUser } from '../controller/auth.controller.js'
-
+import { deleteUserByAdmin } from '../controller/auth.controller.js'
 
 const router  = express.Router()  
 
@@ -36,6 +36,7 @@ router.get("/pending", verifyToken , agenAdmintonly  , getPendingUsers)
 router.put("/aprovependiniguser" , verifyToken , agenAdmintonly , approvePendingUser)
 router.get("/aproveduserbyadmin" , verifyToken , agenAdmintonly , getApprovedUsersbyAdmin)
 router.put("/rejectuserbyadmin" , verifyToken , agenAdmintonly , rejectPendingUser)
+router.delete("/deleteuserbyadmin" , verifyToken , agenAdmintonly , deleteUserByAdmin)
 
 
 export default router
