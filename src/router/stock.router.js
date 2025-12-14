@@ -1,4 +1,3 @@
-// routes/stockRoutes.js
 import express from "express";
 import { 
   addStock,           // POST
@@ -12,11 +11,20 @@ import { adminOnly } from "../middleware/adminRole.middleware.js";
 
 const router = express.Router();
 
-// CRUD Routes
-router.post("/create",adminOnly, verifyToken, addStock);           // Create
+// CRUD Routes with file upload support
+router.post("/create", adminOnly, verifyToken, (req, res, next) => {
+  // Using the multer middleware from the controller
+  addStock(req, res, next);
+});
+
 router.get("/get", verifyToken, getMyStocks);         // Read all
-router.get("/get:id",adminOnly , verifyToken, getStockById);     // Read single
-router.put("/put:id",adminOnly , verifyToken, updateStock);      // Update
-router.delete("/delete/:id",adminOnly , verifyToken, deleteStock);   // Delete
+router.get("/get/:id", adminOnly, verifyToken, getStockById);     // Read single
+
+// Update route with file upload support
+router.put("/update/:id", adminOnly, verifyToken, (req, res, next) => {
+  updateStock(req, res, next);
+});
+
+router.delete("/delete/:id", adminOnly, verifyToken, deleteStock);   // Delete
 
 export default router;
